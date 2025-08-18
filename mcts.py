@@ -37,27 +37,11 @@ class Node:
     def is_terminal(self) -> bool:
         return self.state.is_terminal()
 
-    # TODO: update ucb computation to use network and policy
-    def ucb1(self, c: float = 2.0) -> float:
-        """
-        w: reward (from current players perspective)
-        n: visits
-        N: parent visits
-        c: balance exploration vs exploitation
-        """
-        if self.visit_count == 0:
-            return float("inf")  # Unvisited nodes have highest priority
-
-        q = self.value / self.visit_count
-        if self.parent is None:
-            return q
-        return q + c * np.sqrt(np.log(self.parent.visit_count) / self.visit_count)
-
     def alphazero_ucb(self, c_puct: float = 1.0) -> float:
         """
         AlphaZero UCB formula: Q(s,a) + c_puct * P(s,a) * sqrt(N(s)) / (1 + N(s,a))
-        
-        Where:
+
+        With:        Where:
         - Q(s,a) = average value of this node (exploitation)
         - P(s,a) = prior probability from neural network policy
         - N(s) = parent visit count
@@ -65,33 +49,24 @@ class Node:
         - c_puct = exploration constant (typically 1.0 for AlphaZero)
         """
         if self.parent is None:
-            return 0.0  # Root node doesn't need UCB
-        
-        # Q(s,a): Average value (exploitation term)
+            return 0.0  
+
         if self.visit_count == 0:
             q_value = 0.0
         else:
             q_value = self.value / self.visit_count
-        
+
         # Exploration term: c_puct * P(s,a) * sqrt(N(s)) / (1 + N(s,a))
         exploration = (
-            c_puct * 
-            self.prior * 
-            np.sqrt(self.parent.visit_count) / 
-            (1 + self.visit_count)
+            c_puct
+            * self.prior
+            * np.sqrt(self.parent.visit_count)
+            / (1 + self.visit_count)
         )
-        
+
         return q_value + exploration
 
-    def best_child_ucb1(self) -> "Node":
-        if not self.children:
-            return self
-
-        ucbs = [node.ucb1() for node in self.children]
-        best_idx = np.argmax(ucbs)
-        return self.children[best_idx]
-    
-    def best_child_alphazero(self) -> "Node":
+    def best_child_ucb(self) -> "Node":
         """Select best child using AlphaZero UCB formula."""
         if not self.children:
             return self
@@ -104,13 +79,9 @@ class Node:
 def select(node: Node) -> Node:
     """Walk down until leaf node, picking best child using AlphaZero UCB."""
     while node.children:
-        node = node.best_child_alphazero()
+        node = node.best_child_ucb()
     return node
 
-
-# TODO: for terminal nodes, we should pick the "real" value right? not the neural network output?
-
-# TODO: how does the training of the value work? what is the ground truth? do we average all rewards?
 
 
 def expand(node: Node, model: network.Model) -> float:
@@ -121,7 +92,14 @@ def expand(node: Node, model: network.Model) -> float:
     if node.is_terminal():
         return node.state.get_value()
 
-    policy, value = model.forward(node.state)
+    # Get tensor and add batch dimension for network
+    state_tensor = node.state.encode().unsqueeze(0)  # (1, channels, height, width)
+    policy, value = model.forward(state_tensor)
+    
+    # Extract single results from batch
+    policy = policy[0]  # Remove batch dimension
+    value = value[0, 0].item()  # Extract scalar value
+    
     legal_moves = node.state.get_legal_moves()
 
     for move in legal_moves:

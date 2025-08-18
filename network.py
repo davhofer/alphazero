@@ -78,18 +78,21 @@ class Model(nn.Module):
         self.value_fc1 = nn.Linear(policy_head_channels * self.board_size, 256)
         self.value_fc2 = nn.Linear(256, 1)
         
-    def forward(self, state: game.GameState) -> tuple[torch.Tensor, float]:
-        # Get encoded state as tensor
-        x = state.encode()
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Forward pass expecting batched input.
         
+        Args:
+            x: Input tensor of shape (batch_size, input_channels, board_height, board_width)
+               
+        Returns:
+            policy: Policy probabilities of shape (batch_size, num_possible_moves)
+            value: Value estimates of shape (batch_size, 1)
+        """
         # Validate input shape
         expected_shape = (self.input_channels, self.board_height, self.board_width)
-        if x.shape != expected_shape:
-            raise ValueError(f"Expected input shape {expected_shape}, got {x.shape}")
-        
-        # Ensure x has batch dimension
-        if x.dim() == 3:
-            x = x.unsqueeze(0)
+        if x.shape[1:] != expected_shape:
+            raise ValueError(f"Expected input shape (batch_size, {expected_shape[0]}, {expected_shape[1]}, {expected_shape[2]}), got {x.shape}")
         
         # Initial convolution
         x = F.relu(self.bn_input(self.conv_input(x)))
@@ -110,8 +113,7 @@ class Model(nn.Module):
         value = F.relu(self.value_fc1(value))
         value = torch.tanh(self.value_fc2(value))
         
-        # Return policy as tensor and value as float
-        return policy.squeeze(0), value.item()
+        return policy, value
     
     def get_expected_input_shape(self) -> tuple[int, int, int]:
         """Returns the expected input tensor shape: (channels, height, width)"""
