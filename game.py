@@ -20,6 +20,10 @@ class GameState:
         pass
 
     @classmethod
+    def encoded_shape(cls) -> tuple:
+        pass
+
+    @classmethod
     def initial_state(cls) -> "GameState":
         pass
 
