@@ -344,7 +344,7 @@ def training_loop(config: TrainingConfig) -> None:
     training_stats = []
     eval_stats = []
 
-    print(f"🚀 Training for {config.iterations} iterations")
+    print(f"\n🚀 Training for {config.iterations} iterations")
     print(f"📊 Self-play: {config.self_play_rounds} games per iteration")
     print(
         f"🎯 Evaluation: Every {config.eval_frequency} iterations ({config.eval_games} games)"
@@ -354,12 +354,12 @@ def training_loop(config: TrainingConfig) -> None:
     # Main training loop with progress bar
     for iteration in tqdm(range(1, config.iterations + 1), desc="Training iterations"):
         # Self-play phase
-        tqdm.write(f"🎮 Iteration {iteration}: Generating self-play data...")
+        tqdm.write(f"\n🎮 Iteration {iteration}: Generating self-play data...")
         training_samples = self_play(model, config, game_module)
         tqdm.write(f"📚 Generated {len(training_samples)} training examples")
 
         # Training phase
-        tqdm.write("🏋️  Training network...")
+        tqdm.write("🏋️ Training network...")
         train_stats = train_network(model, training_samples, config)
 
         # Record training statistics
@@ -380,7 +380,7 @@ def training_loop(config: TrainingConfig) -> None:
 
         # Evaluation phase
         if iteration % config.eval_frequency == 0:
-            tqdm.write("🎯 Evaluating model vs random baseline...")
+            tqdm.write("\n🎯 Evaluating model vs random baseline...")
             eval_result = evaluation.evaluate_model_vs_random(
                 model,
                 game_module,
@@ -410,7 +410,7 @@ def training_loop(config: TrainingConfig) -> None:
 
     # Final best model save
     save_best_model(model, optimizer, config.iterations, config, training_stats)
-    print("✅ Training complete!")
+    print("\n✅ Training complete!")
     print(f"📁 Best model saved in: {config.checkpoint_dir}")
     print(f"📊 Logs saved in: {config.log_dir}")
 
