@@ -9,19 +9,22 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 import json
 import os
+import importlib
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from tqdm import tqdm
 import mcts
 import network
-import game
 import evaluation
 
 
 @dataclass
 class TrainingConfig:
     """Configuration for AlphaZero training."""
+
+    # Game selection
+    game_module: str = "tictactoe"  # Module name to import (e.g., "tictactoe", "mills")
 
     # (Outer) training loop parameters
     iterations: int = 100
@@ -59,16 +62,45 @@ class TrainingConfig:
             return cls(**json.load(f))
 
 
+def load_game_module(module_name: str):
+    """Dynamically load a game module."""
+    try:
+        game_module = importlib.import_module(module_name)
+        
+        # Validate required classes exist
+        required_classes = ['GameState', 'Move']
+        for class_name in required_classes:
+            if not hasattr(game_module, class_name):
+                raise AttributeError(f"Game module '{module_name}' missing required class: {class_name}")
+        
+        # Validate required class methods exist
+        GameState = getattr(game_module, 'GameState')
+        Move = getattr(game_module, 'Move')
+        
+        required_gamestate_methods = ['num_possible_moves', 'encoded_shape', 'initial_state']
+        for method_name in required_gamestate_methods:
+            if not hasattr(GameState, method_name):
+                raise AttributeError(f"GameState missing required class method: {method_name}")
+        
+        print(f"✅ Loaded and validated game module: {module_name}")
+        return game_module
+        
+    except ImportError as e:
+        raise ImportError(f"Could not import game module '{module_name}': {e}")
+    except AttributeError as e:
+        raise AttributeError(f"Game module validation failed: {e}")
+
+
 # TODO: replace game with the actual game we're learning
 # TODO: how to do that elegantly?
 
 
-def self_play(model: network.Model, config: TrainingConfig) -> list[dict]:
+def self_play(model: network.Model, config: TrainingConfig, game_module) -> list[dict]:
     """Let the model play games against itself and record encountered positions and outcomes."""
     training_examples = []
 
     for _ in tqdm(range(config.self_play_rounds), desc="Self-play games", leave=False):
-        state = game.GameState.initial_state()
+        state = game_module.GameState.initial_state()
         game_history = []  # (state, policy) pairs for this game
 
         # Play one complete game
@@ -86,7 +118,7 @@ def self_play(model: network.Model, config: TrainingConfig) -> list[dict]:
             )[0]
 
             # Decode move and apply it
-            move = game.Move.decode(encoded_move)
+            move = game_module.Move.decode(encoded_move)
             state = state.apply_move(move)
 
         # Game is finished, get final outcome
@@ -269,6 +301,9 @@ def load_checkpoint(model: network.Model, checkpoint_path: str):
 def training_loop(config: TrainingConfig) -> None:
     """Main AlphaZero training loop with monitoring and checkpoints."""
 
+    # Load game module
+    game_module = load_game_module(config.game_module)
+
     # Setup directories
     Path(config.checkpoint_dir).mkdir(exist_ok=True)
     Path(config.log_dir).mkdir(exist_ok=True)
@@ -276,9 +311,13 @@ def training_loop(config: TrainingConfig) -> None:
     # Save configuration
     config.save(Path(config.log_dir) / "config.json")
 
+    # Setup device (GPU/CPU)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"🖥️  Using device: {device}")
+
     # Initialize model
-    (input_channels, board_height, board_width) = game.GameState.encoded_shape()
-    num_possible_moves = game.GameState.num_possible_moves()
+    (input_channels, board_height, board_width) = game_module.GameState.encoded_shape()
+    num_possible_moves = game_module.GameState.num_possible_moves()
 
     model = network.Model(
         input_channels,
@@ -287,7 +326,7 @@ def training_loop(config: TrainingConfig) -> None:
         num_possible_moves,
         num_filters=config.num_filters,
         num_residual_blocks=config.num_residual_blocks,
-    )
+    ).to(device)
 
     optimizer = optim.Adam(
         model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay
@@ -297,7 +336,7 @@ def training_loop(config: TrainingConfig) -> None:
     training_stats = []
     eval_stats = []
 
-    print(f"🚀 Starting AlphaZero training for {config.iterations} iterations")
+    print(f"🚀 Training for {config.iterations} iterations")
     print(f"📊 Self-play: {config.self_play_rounds} games per iteration")
     print(
         f"🎯 Evaluation: Every {config.eval_frequency} iterations ({config.eval_games} games)"
@@ -308,7 +347,7 @@ def training_loop(config: TrainingConfig) -> None:
     for iteration in tqdm(range(1, config.iterations + 1), desc="Training iterations"):
         # Self-play phase
         tqdm.write(f"🎮 Iteration {iteration}: Generating self-play data...")
-        training_samples = self_play(model, config)
+        training_samples = self_play(model, config, game_module)
         tqdm.write(f"📚 Generated {len(training_samples)} training examples")
 
         # Training phase
@@ -336,6 +375,7 @@ def training_loop(config: TrainingConfig) -> None:
             tqdm.write("🎯 Evaluating model vs random baseline...")
             eval_result = evaluation.evaluate_model_vs_random(
                 model,
+                game_module,
                 num_games=config.eval_games,
                 mcts_time_limit=config.mcts_time_limit,
             )
@@ -369,24 +409,137 @@ def training_loop(config: TrainingConfig) -> None:
 
 
 def main():
-    """Entry point for training."""
-    config = TrainingConfig(
-        iterations=100,
-        checkpoint_frequency=10,
-        self_play_rounds=100,
-        mcts_time_limit=0.4,
-        epochs=10,
-        batch_size=32,
-        learning_rate=0.001,
-        weight_decay=0.0001,
-        eval_frequency=20,
-        eval_games=50,
-        num_residual_blocks=4,
-        num_filters=128,
+    """Entry point for training with command line argument parsing."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Train AlphaZero on various games")
+
+    # Game selection
+    parser.add_argument(
+        "--game",
+        default="tictactoe",
+        help="Game module to train on (default: tictactoe)",
     )
 
-    # You can modify config here or load from file:
-    # config = TrainingConfig.load("custom_config.json")
+    # Training loop parameters
+    parser.add_argument(
+        "--iterations",
+        type=int,
+        default=100,
+        help="Number of training iterations (default: 100)",
+    )
+    parser.add_argument(
+        "--checkpoint-freq",
+        type=int,
+        default=10,
+        help="Save checkpoint every N iterations (default: 10)",
+    )
+
+    # Self-play parameters
+    parser.add_argument(
+        "--self-play-rounds",
+        type=int,
+        default=100,
+        help="Number of self-play games per iteration (default: 100)",
+    )
+    parser.add_argument(
+        "--mcts-time-limit",
+        type=float,
+        default=0.5,
+        help="MCTS time limit in seconds (default: 0.5)",
+    )
+
+    # Network training parameters
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=10,
+        help="Training epochs per iteration (default: 10)",
+    )
+    parser.add_argument(
+        "--batch-size", type=int, default=32, help="Training batch size (default: 32)"
+    )
+    parser.add_argument(
+        "--learning-rate",
+        type=float,
+        default=0.001,
+        help="Learning rate (default: 0.001)",
+    )
+    parser.add_argument(
+        "--weight-decay",
+        type=float,
+        default=1e-4,
+        help="L2 weight decay (default: 1e-4)",
+    )
+
+    # Evaluation parameters
+    parser.add_argument(
+        "--eval-freq",
+        type=int,
+        default=20,
+        help="Evaluate every N iterations (default: 20)",
+    )
+    parser.add_argument(
+        "--eval-games",
+        type=int,
+        default=50,
+        help="Number of evaluation games (default: 50)",
+    )
+
+    # Network architecture
+    parser.add_argument(
+        "--residual-blocks",
+        type=int,
+        default=4,
+        help="Number of residual blocks (default: 4)",
+    )
+    parser.add_argument(
+        "--num-filters",
+        type=int,
+        default=128,
+        help="Number of convolutional filters (default: 128)",
+    )
+
+    # Paths
+    parser.add_argument(
+        "--checkpoint-dir",
+        default="checkpoints",
+        help="Checkpoint directory (default: checkpoints)",
+    )
+    parser.add_argument(
+        "--log-dir", default="logs", help="Log directory (default: logs)"
+    )
+
+    # Configuration file
+    parser.add_argument("--config", type=str, help="Load configuration from JSON file")
+
+    args = parser.parse_args()
+
+    # Load from config file if specified
+    if args.config:
+        print(f"📝 Loading configuration from: {args.config}")
+        config = TrainingConfig.load(args.config)
+    else:
+        # Create config from command line arguments
+        config = TrainingConfig(
+            game_module=args.game,
+            iterations=args.iterations,
+            checkpoint_frequency=args.checkpoint_freq,
+            self_play_rounds=args.self_play_rounds,
+            mcts_time_limit=args.mcts_time_limit,
+            epochs=args.epochs,
+            batch_size=args.batch_size,
+            learning_rate=args.learning_rate,
+            weight_decay=args.weight_decay,
+            eval_frequency=args.eval_freq,
+            eval_games=args.eval_games,
+            num_residual_blocks=args.residual_blocks,
+            num_filters=args.num_filters,
+            checkpoint_dir=args.checkpoint_dir,
+            log_dir=args.log_dir,
+        )
+
+    print(f"🎮 Training AlphaZero on: {config.game_module}")
 
     training_loop(config)
 
