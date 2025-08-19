@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import numpy as np
 import time
 import torch
+from typing import Optional, List
 
 import game
 import network
@@ -104,7 +107,7 @@ def expand(node: Node, model: network.Model) -> float:
 
     for move in legal_moves:
         encoded_move = move.encode()
-        p = policy[encoded_move]
+        p = policy[encoded_move].detach().item()
         new_state = node.state.apply_move(move)
         child = Node(node, new_state, p, move)
         node.children.append(child)
@@ -138,7 +141,7 @@ def run_mcts(root: Node, model: network.Model, time_limit: float = 0.5) -> torch
         backpropagate(node, reward)
 
     # Create policy based on visit counts
-    policy = [0.0] * game.GameState.num_possible_moves()
+    policy = [0.0] * root.state.__class__.num_possible_moves()
 
     # Avoid division by zero
     if root.visit_count == 0:
