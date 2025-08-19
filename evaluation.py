@@ -186,7 +186,9 @@ def main():
     
     # Load game module
     try:
-        game_module = importlib.import_module(args.game)
+        # Prepend "games." to the module name
+        full_module_name = f"games.{args.game}"
+        game_module = importlib.import_module(full_module_name)
         print(f"🎮 Loaded game module: {args.game}")
     except ImportError as e:
         print(f"❌ Failed to import game module '{args.game}': {e}")

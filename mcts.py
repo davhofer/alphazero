@@ -5,7 +5,7 @@ import time
 import torch
 from typing import Optional, List
 
-import game
+from games import game
 import network
 
 

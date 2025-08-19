@@ -5,7 +5,7 @@ import numpy as np
 from typing import List, Optional, Tuple
 from copy import deepcopy
 
-from game import Move, GameState
+from .game import Move, GameState
 
 
 class TicTacToeMove(Move):

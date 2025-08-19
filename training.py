@@ -65,7 +65,9 @@ class TrainingConfig:
 def load_game_module(module_name: str):
     """Dynamically load a game module."""
     try:
-        game_module = importlib.import_module(module_name)
+        # Prepend "games." to the module name
+        full_module_name = f"games.{module_name}"
+        game_module = importlib.import_module(full_module_name)
         
         # Validate required classes exist
         required_classes = ['GameState', 'Move']

@@ -5,7 +5,7 @@ import torch
 from abc import ABC, abstractmethod
 from typing import Optional
 
-import game
+from games import game
 import network
 import mcts
 
