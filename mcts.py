@@ -52,7 +52,7 @@ class Node:
         - c_puct = exploration constant (typically 1.0 for AlphaZero)
         """
         if self.parent is None:
-            return 0.0  
+            return 0.0
 
         if self.visit_count == 0:
             q_value = 0.0
@@ -86,23 +86,29 @@ def select(node: Node) -> Node:
     return node
 
 
-
 def expand(node: Node, model: network.Model) -> float:
     """Expand all child nodes of current (leaf) node and compute its value."""
     assert not node.children
 
-    # TODO: is this correct?
     if node.is_terminal():
-        return node.state.get_value()
+        objective_value = node.state.get_value()
+        # Convert objective result to current player's perspective
+        # Player 0 corresponds to player 1 in the game state, Player 1 to player -1
+        if node.player == 0:
+            # Player 1's perspective: +1 if player 1 won, -1 if player 2 won
+            return objective_value
+        else:
+            # Player 2's perspective: +1 if player 2 won, -1 if player 1 won
+            return -objective_value
 
     # Get tensor and add batch dimension for network
     state_tensor = node.state.encode().unsqueeze(0)  # (1, channels, height, width)
     policy, value = model.forward(state_tensor)
-    
+
     # Extract single results from batch
     policy = policy[0]  # Remove batch dimension
     value = value[0, 0].item()  # Extract scalar value
-    
+
     legal_moves = node.state.get_legal_moves()
 
     for move in legal_moves:

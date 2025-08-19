@@ -97,7 +97,7 @@ class TicTacToeState(GameState):
         return self._check_winner() is not None or len(self.get_legal_moves()) == 0
     
     def get_value(self) -> Optional[float]:
-        """Returns game value from current player's perspective."""
+        """Returns objective game result: 1 if player 1 won, -1 if player 2 won, 0 for draw."""
         if not self.is_terminal():
             return None
         
@@ -105,11 +105,9 @@ class TicTacToeState(GameState):
         if winner is None:
             return 0.0  # Draw
         elif winner == 1:
-            # Player 1 won - return value from current player's perspective
-            return 1.0 if self.current_player == 1 else -1.0
+            return 1.0  # Player 1 won
         else:  # winner == -1
-            # Player 2 won - return value from current player's perspective  
-            return 1.0 if self.current_player == -1 else -1.0
+            return -1.0  # Player 2 won
     
     def encode(self) -> torch.Tensor:
         """

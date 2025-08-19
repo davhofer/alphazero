@@ -68,25 +68,33 @@ def load_game_module(module_name: str):
         # Prepend "games." to the module name
         full_module_name = f"games.{module_name}"
         game_module = importlib.import_module(full_module_name)
-        
+
         # Validate required classes exist
-        required_classes = ['GameState', 'Move']
+        required_classes = ["GameState", "Move"]
         for class_name in required_classes:
             if not hasattr(game_module, class_name):
-                raise AttributeError(f"Game module '{module_name}' missing required class: {class_name}")
-        
+                raise AttributeError(
+                    f"Game module '{module_name}' missing required class: {class_name}"
+                )
+
         # Validate required class methods exist
-        GameState = getattr(game_module, 'GameState')
-        Move = getattr(game_module, 'Move')
-        
-        required_gamestate_methods = ['num_possible_moves', 'encoded_shape', 'initial_state']
+        GameState = getattr(game_module, "GameState")
+        Move = getattr(game_module, "Move")
+
+        required_gamestate_methods = [
+            "num_possible_moves",
+            "encoded_shape",
+            "initial_state",
+        ]
         for method_name in required_gamestate_methods:
             if not hasattr(GameState, method_name):
-                raise AttributeError(f"GameState missing required class method: {method_name}")
-        
+                raise AttributeError(
+                    f"GameState missing required class method: {method_name}"
+                )
+
         print(f"✅ Loaded and validated game module: {module_name}")
         return game_module
-        
+
     except ImportError as e:
         raise ImportError(f"Could not import game module '{module_name}': {e}")
     except AttributeError as e:
@@ -124,13 +132,14 @@ def self_play(model: network.Model, config: TrainingConfig, game_module) -> list
             state = state.apply_move(move)
 
         # Game is finished, get final outcome
-        final_value = state.get_value()  # +1, 0, or -1
+        final_value = (
+            state.get_value()
+        )  # +1 if player 1 won, -1 if player 2 won, 0 for draw
         assert final_value is not None
 
         # Create training examples with final outcome as ground truth
         for i, (state_encoding, mcts_policy) in enumerate(game_history):
-            # Value from current player's perspective at this position
-            # If it's an odd move number, flip the value (different player)
+            # Convert objective result to current player's perspective at this position
             player_value = final_value if i % 2 == 0 else -final_value
 
             training_examples.append(
@@ -311,7 +320,7 @@ def training_loop(config: TrainingConfig) -> None:
     config.save(Path(config.log_dir) / "config.json")
 
     # Setup device (GPU/CPU)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"🖥️  Using device: {device}")
 
     # Initialize model
