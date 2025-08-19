@@ -253,14 +253,14 @@ def train_network(
     return final_stats
 
 
-def save_checkpoint(
+def save_best_model(
     model: network.Model,
     optimizer,
     iteration: int,
     config: TrainingConfig,
     training_stats: list,
 ) -> None:
-    """Save model checkpoint with training statistics."""
+    """Save best model checkpoint with training statistics."""
     Path(config.checkpoint_dir).mkdir(exist_ok=True)
 
     checkpoint = {
@@ -271,18 +271,15 @@ def save_checkpoint(
         "training_stats": training_stats,
     }
 
-    # Save latest checkpoint
-    checkpoint_path = Path(config.checkpoint_dir) / f"checkpoint_iter_{iteration}.pt"
-    torch.save(checkpoint, checkpoint_path)
-
     # Save best checkpoint (based on lowest loss)
     if training_stats and len(training_stats) > 0:
         latest_loss = training_stats[-1]["avg_loss"]
-        best_path = Path(config.checkpoint_dir) / "best_model.pt"
+        best_path = Path(config.checkpoint_dir) / f"best_model_{config.game_module}.pt"
 
         # Check if this is the best model so far
         if not best_path.exists():
             torch.save(checkpoint, best_path)
+            print(f"💾 First model saved! Loss: {latest_loss:.4f}")
         else:
             best_checkpoint = torch.load(best_path)
             best_stats = best_checkpoint["training_stats"]
@@ -389,10 +386,9 @@ def training_loop(config: TrainingConfig) -> None:
                 f"({eval_result['wins']}-{eval_result['draws']}-{eval_result['losses']})"
             )
 
-        # Save checkpoints
+        # Save best model
         if iteration % config.checkpoint_frequency == 0:
-            save_checkpoint(model, optimizer, iteration, config, training_stats)
-            tqdm.write(f"💾 Checkpoint saved at iteration {iteration}")
+            save_best_model(model, optimizer, iteration, config, training_stats)
 
         # Save logs (structured for easy plotting)
         logs = {
@@ -403,10 +399,10 @@ def training_loop(config: TrainingConfig) -> None:
         with open(Path(config.log_dir) / "training_log.json", "w") as f:
             json.dump(logs, f, indent=2)
 
-    # Final checkpoint
-    save_checkpoint(model, optimizer, config.iterations, config, training_stats)
+    # Final best model save
+    save_best_model(model, optimizer, config.iterations, config, training_stats)
     print("✅ Training complete!")
-    print(f"📁 Checkpoints saved in: {config.checkpoint_dir}")
+    print(f"📁 Best model saved in: {config.checkpoint_dir}")
     print(f"📊 Logs saved in: {config.log_dir}")
 
 
