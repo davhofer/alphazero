@@ -1,6 +1,6 @@
 # AlphaZero Implementation
 
-A simple implementation of the AlphaZero algorithm for learning and understanding the core concepts. This implementation doesn't contain any performance optimizations.
+A fully functional yet simple implementation of the AlphaZero algorithm. The focus lies on clarity and understanding of the core algorithm and the implementation doesn't contain any performance optimizations.
 
 ## Overview
 
