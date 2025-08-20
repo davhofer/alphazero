@@ -14,7 +14,7 @@ class Node:
     # internal state representation
     state: game.GameState
     children: list["Node"]
-    player: int  # 0 or 1
+    player: int  # 1 or -1
     visit_count: float
     value: float
     prior: float  # prior probability assigned to it by parent
@@ -35,7 +35,7 @@ class Node:
         self.children = []
         self.move = move
 
-        self.player = 0 if parent is None else 1 - parent.player
+        self.player = 1 if parent is None else -parent.player
 
     def is_terminal(self) -> bool:
         return self.state.is_terminal()
@@ -93,13 +93,9 @@ def expand(node: Node, model: network.Model) -> float:
     if node.is_terminal():
         objective_value = node.state.get_value()
         # Convert objective result to current player's perspective
-        # Player 0 corresponds to player 1 in the game state, Player 1 to player -1
-        if node.player == 0:
-            # Player 1's perspective: +1 if player 1 won, -1 if player 2 won
-            return objective_value
-        else:
-            # Player 2's perspective: +1 if player 2 won, -1 if player 1 won
-            return -objective_value
+        # Objective value: +1 if player 1 won, -1 if player -1 won, 0 for draw
+        # Return value from current player's perspective
+        return objective_value * node.player
 
     # Get tensor and add batch dimension for network
     state_tensor = node.state.encode().unsqueeze(0)  # (1, channels, height, width)
@@ -130,13 +126,12 @@ def backpropagate(node: Node, reward: float) -> None:
     current_reward = reward
 
     while current_node is not None:
-        if current_node.player:
-            current_reward = -current_reward
-
+        # Add reward from current player's perspective
         current_node.value += current_reward
         current_node.visit_count += 1
 
         current_node = current_node.parent
+        # Flip reward for next level up (alternating players)
         current_reward = -current_reward
 
 
