@@ -103,6 +103,9 @@ def expand(node: Node, model: network.Model) -> float:
 
     # Get tensor and add batch dimension for network
     state_tensor = node.state.encode().unsqueeze(0)  # (1, channels, height, width)
+    # Move tensor to same device as model
+    device = next(model.parameters()).device
+    state_tensor = state_tensor.to(device)
     policy, value = model.forward(state_tensor)
 
     # Extract single results from batch

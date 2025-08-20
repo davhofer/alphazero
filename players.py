@@ -93,11 +93,14 @@ class NetworkDirectPlayer(Player):
         # Get network policy directly
         with torch.no_grad():
             state_tensor = state.encode().unsqueeze(0)  # Add batch dimension
+            # Move tensor to same device as model
+            device = next(self.model.parameters()).device
+            state_tensor = state_tensor.to(device)
             policy, _ = self.model(state_tensor)
             policy = policy[0]  # Remove batch dimension
 
         # Convert to probabilities and filter legal moves
-        policy_probs = policy.numpy()
+        policy_probs = policy.cpu().numpy()
         legal_moves = state.get_legal_moves()
 
         legal_probs = []

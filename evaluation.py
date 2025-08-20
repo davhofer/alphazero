@@ -114,7 +114,9 @@ def evaluate_model_vs_random(
 
 def load_model_from_checkpoint(checkpoint_path: str, game_module) -> network.Model:
     """Load a model from a checkpoint file."""
-    checkpoint = torch.load(checkpoint_path, map_location="cpu")
+    # Determine device to use
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    checkpoint = torch.load(checkpoint_path, map_location=device)
 
     # Get model parameters from checkpoint or use defaults
     input_channels, board_height, board_width = game_module.GameState.encoded_shape()
@@ -134,6 +136,7 @@ def load_model_from_checkpoint(checkpoint_path: str, game_module) -> network.Mod
     )
 
     model.load_state_dict(checkpoint["model_state_dict"])
+    model.to(device)  # Move model to appropriate device
     model.eval()
     return model
 

@@ -162,12 +162,20 @@ def train_network(
         print("No training samples provided!")
         return {"avg_loss": 0, "avg_policy_loss": 0, "avg_value_loss": 0}
 
+    # Get device from model
+    device = next(model.parameters()).device
+
     # Prepare training data
     states = torch.stack([sample["state"] for sample in training_samples])
     target_policies = torch.stack([sample["policy"] for sample in training_samples])
     target_values = torch.tensor(
         [sample["value"] for sample in training_samples], dtype=torch.float32
     ).unsqueeze(1)
+
+    # Move data to same device as model
+    states = states.to(device)
+    target_policies = target_policies.to(device)
+    target_values = target_values.to(device)
 
     # Create dataset and dataloader
     dataset = TensorDataset(states, target_policies, target_values)
