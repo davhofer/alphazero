@@ -405,7 +405,9 @@ def training_loop(config: TrainingConfig) -> None:
             "evaluation": eval_stats,
             "config": config.__dict__,
         }
-        with open(Path(config.log_dir) / "training_log.json", "w") as f:
+        with open(
+            Path(config.log_dir) / f"training_log_{config.game_module}.json", "w"
+        ) as f:
             json.dump(logs, f, indent=2)
 
     # Final best model save
@@ -424,8 +426,8 @@ def main():
     # Game selection
     parser.add_argument(
         "--game",
-        default="tictactoe",
-        help="Game module to train on (default: tictactoe)",
+        required=True,
+        help="Game module to train on (any of the games listed in games/)",
     )
 
     # Training loop parameters

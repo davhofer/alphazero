@@ -188,7 +188,9 @@ def main():
 
     # Game selection
     parser.add_argument(
-        "--game", default="tictactoe", help="Game module to use (default: tictactoe)"
+        "--game",
+        required=True,
+        help="Game module to use (any of the games listed in games/)",
     )
 
     # Player configuration
