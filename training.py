@@ -51,6 +51,9 @@ class TrainingConfig:
     # Paths
     checkpoint_dir: str = "checkpoints"
     log_dir: str = "logs"
+    
+    # Device configuration
+    device: str = None  # "cpu", "cuda", or None for auto-detect
 
     def save(self, path: str) -> None:
         with open(path, "w") as f:
@@ -328,7 +331,12 @@ def training_loop(config: TrainingConfig) -> None:
     config.save(Path(config.log_dir) / "config.json")
 
     # Setup device (GPU/CPU)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if config.device:
+        # Use specified device
+        device = torch.device(config.device)
+    else:
+        # Auto-detect: use CUDA if available, otherwise CPU
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"🖥️  Using device: {device}")
 
     # Initialize model
@@ -527,6 +535,14 @@ def main():
         "--log-dir", default="logs", help="Log directory (default: logs)"
     )
 
+    # Device configuration
+    parser.add_argument(
+        "--device",
+        type=str,
+        choices=["cpu", "cuda"],
+        help="Device to use for training (cpu/cuda). If not specified, uses CUDA if available.",
+    )
+    
     # Configuration file
     parser.add_argument("--config", type=str, help="Load configuration from JSON file")
 
@@ -554,6 +570,7 @@ def main():
             num_filters=args.num_filters,
             checkpoint_dir=args.checkpoint_dir,
             log_dir=args.log_dir,
+            device=args.device,
         )
 
     print(f"🎮 Training AlphaZero on: {config.game_module}")
