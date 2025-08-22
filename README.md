@@ -1,6 +1,6 @@
 # AlphaZero Implementation
 
-A fully functional yet simple implementation of the AlphaZero algorithm. The focus lies on clarity and understanding of the core algorithm and the implementation doesn't contain any performance optimizations.
+A fully functional yet simple implementation of the [AlphaZero algorithm by Silver et al., 2017](https://www.nature.com/articles/nature24270). The focus lies on clarity and understanding of the core algorithm and the implementation doesn't contain any performance optimizations.
 
 ## Overview
 
@@ -19,34 +19,42 @@ The implementation includes:
 
 ## Installation
 
-We use `uv` for dependency management. To install:
+### As a Package
+
+You can install this package directly from GitHub using pip or uv:
 
 ```bash
+# Using pip
+pip install git+https://github.com/davhofer/alphazero.git
+
+# Using uv
+uv pip install git+https://github.com/davhofer/alphazero.git
+```
+
+### For Development
+
+If you want to develop or modify the code:
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/alphazero.git
+cd alphazero
+
 # Install dependencies
 uv sync
 ```
-
-(However, directly running the code as described below also takes care of this.)
 
 ## Usage
 
 ### Training
 
-See all configuration options:
-
-```bash
-uv run python training.py --help
-```
-
 Train an AlphaZero agent on a game:
 
 ```bash
-
-# Train on tictactoe
-uv run python training.py --game tictactoe
+uv run python -m alphazero train --game tictactoe
 
 # Customize training parameters
-uv run python training.py --game chess --iterations 200 --self-play-rounds 50
+uv run python -m alphazero train --game chess --iterations 200 --self-play-rounds 50
 ```
 
 Key training parameters:
@@ -57,25 +65,47 @@ Key training parameters:
 - `--mcts-time-limit`: MCTS thinking time in seconds (default: 0.5)
 - `--epochs`: Neural network training epochs per iteration (default: 10)
 
+To see all configuration options:
+
+```bash
+uv run python -m alphazero train --help
+```
+
 ### Evaluation
 
 Evaluate trained models or pit different players against each other:
 
 ```bash
 # Evaluate a trained network against random player
-uv run python evaluation.py --game tictactoe --player1 network-mcts --player1-model checkpoints/best_model_tictactoe.pt --player2 random --games 100
+uv run python -m alphazero eval --game tictactoe --player1 network-mcts --player1-model checkpoints/best_model_tictactoe.pt --player2 random --games 100
 
 # Human vs trained network
-uv run python evaluation.py --game connect_four --player1 human --player2 network-mcts --player2-model checkpoints/best_model_connect_four.pt
+uv run python -m alphazero eval --game connect_four --player1 human --player2 network-mcts --player2-model checkpoints/best_model_connect_four.pt
 
 # See all available options
-uv run python evaluation.py --help
+uv run python -m alphazero eval --help
 ```
 
 Player types:
 
 - `random`: Random moves
-- `greedy`: Simple greedy strategy
+- `greedy`: Simple greedy strategy (NOT IMPLEMENTED)
 - `human`: Human player (interactive)
 - `network-mcts`: Trained network with MCTS
 - `network-direct`: Trained network direct policy (no MCTS)
+
+### Plotting
+
+Generate plots from training logs:
+
+```bash
+# Generate all plots from training log
+uv run python -m alphazero plot logs/training_log.json
+
+# See all available options
+uv run python -m alphazero plot --help
+```
+
+## Results
+
+TBD

@@ -14,9 +14,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from tqdm import tqdm
-import mcts
-import network
-import evaluation
+from . import mcts
+from . import network
+from . import evaluation
 
 
 @dataclass
@@ -51,9 +51,9 @@ class TrainingConfig:
     # Paths
     checkpoint_dir: str = "checkpoints"
     log_dir: str = "logs"
-    
+
     # Device configuration
-    device: str = None  # "cpu", "cuda", or None for auto-detect
+    device: str | None = None  # "cpu", "cuda", or None for auto-detect
 
     def save(self, path: str) -> None:
         with open(path, "w") as f:
@@ -68,8 +68,8 @@ class TrainingConfig:
 def load_game_module(module_name: str):
     """Dynamically load a game module."""
     try:
-        # Prepend "games." to the module name
-        full_module_name = f"games.{module_name}"
+        # Prepend "alphazero.games." to the module name
+        full_module_name = f"alphazero.games.{module_name}"
         game_module = importlib.import_module(full_module_name)
 
         # Validate required classes exist
@@ -367,6 +367,22 @@ def training_loop(config: TrainingConfig) -> None:
     )
     print(f"🧠 Network: {sum(p.numel() for p in model.parameters())} parameters")
 
+    # Initial evaluation before training starts
+    print("\n🎯 Running initial evaluation vs random baseline...")
+    initial_eval_result = evaluation.evaluate_model_vs_random(
+        model,
+        game_module,
+        num_games=config.eval_games,
+        mcts_time_limit=config.mcts_time_limit,
+    )
+
+    eval_stats.append({"iteration": 0, **initial_eval_result})
+
+    print(
+        f"🏆 Initial evaluation result: {initial_eval_result['win_rate']:.1%} win rate "
+        f"({initial_eval_result['wins']}-{initial_eval_result['draws']}-{initial_eval_result['losses']})"
+    )
+
     # Main training loop with progress bar
     for iteration in tqdm(range(1, config.iterations + 1), desc="Training iterations"):
         # Self-play phase
@@ -542,7 +558,7 @@ def main():
         choices=["cpu", "cuda"],
         help="Device to use for training (cpu/cuda). If not specified, uses CUDA if available.",
     )
-    
+
     # Configuration file
     parser.add_argument("--config", type=str, help="Load configuration from JSON file")
 

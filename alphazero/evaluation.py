@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Dict, Optional
 from tqdm import tqdm
 
-import network
-from players import (
+from . import network
+from .players import (
     Player,
     RandomPlayer,
     NetworkMCTSPlayer,
@@ -230,8 +230,8 @@ def main():
 
     # Load game module
     try:
-        # Prepend "games." to the module name
-        full_module_name = f"games.{args.game}"
+        # Prepend "alphazero.games." to the module name
+        full_module_name = f"alphazero.games.{args.game}"
         game_module = importlib.import_module(full_module_name)
         print(f"🎮 Loaded game module: {args.game}")
     except ImportError as e:

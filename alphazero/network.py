@@ -3,7 +3,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from games import game
+from .games import game
 
 
 class ResidualBlock(nn.Module):

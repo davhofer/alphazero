@@ -5,8 +5,8 @@ import time
 import torch
 from typing import Optional, List
 
-from games import game
-import network
+from .games import game
+from . import network
 
 
 class Node:

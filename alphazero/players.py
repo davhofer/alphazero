@@ -5,9 +5,9 @@ import torch
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from games import game
-import network
-import mcts
+from .games import game
+from . import network
+from . import mcts
 
 
 class Player(ABC):
