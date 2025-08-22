@@ -93,9 +93,13 @@ def play_single_game(player1: Player, player2: Player, game_module) -> Optional[
 
 
 def evaluate_model_vs_random(
-    model, game_module, num_games: int = 100, mcts_time_limit=0.5
+    model, game_module, num_games: int = 100, mcts_time_limit=0.5, device: Optional[torch.device] = None
 ) -> Dict[str, float]:
     """Evaluate trained model against random player."""
+    
+    # Ensure model is on the specified device
+    if device is not None:
+        model = model.to(device)
 
     alphazero_player = NetworkMCTSPlayer(
         model, mcts_time_limit=mcts_time_limit, name="AlphaZero"
@@ -113,19 +117,21 @@ def evaluate_model_vs_random(
     }
 
 
-def load_model_from_checkpoint(checkpoint_path: str, game_module) -> network.Model:
+def load_model_from_checkpoint(checkpoint_path: str, game_module, device: Optional[torch.device] = None) -> network.Model:
     """Load a model from a checkpoint file."""
     # Determine device to use
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     checkpoint = torch.load(checkpoint_path, map_location=device)
 
     # Get model parameters from checkpoint or use defaults
     input_channels, board_height, board_width = game_module.GameState.encoded_shape()
     num_possible_moves = game_module.GameState.num_possible_moves()
 
-    # Try to get architecture params from checkpoint, with fallbacks
-    num_filters = checkpoint.get("num_filters", 128)
-    num_residual_blocks = checkpoint.get("num_residual_blocks", 4)
+    # Try to get architecture params from checkpoint config
+    config = checkpoint.get("config", {})
+    num_filters = config.get("num_filters", 128)
+    num_residual_blocks = config.get("num_residual_blocks", 4)
 
     model = network.Model(
         input_channels=input_channels,
@@ -148,6 +154,7 @@ def create_player(
     model_path: Optional[str] = None,
     mcts_time_limit: float = 0.5,
     name: Optional[str] = None,
+    device: Optional[torch.device] = None,
 ) -> Player:
     """Create a player of the specified type."""
 
@@ -166,7 +173,7 @@ def create_player(
     elif player_type == "network-mcts":
         if not model_path:
             raise ValueError("network-mcts player requires --model-path")
-        model = load_model_from_checkpoint(model_path, game_module)
+        model = load_model_from_checkpoint(model_path, game_module, device)
         return NetworkMCTSPlayer(
             model,
             mcts_time_limit=mcts_time_limit,
@@ -176,7 +183,7 @@ def create_player(
     elif player_type == "network-direct":
         if not model_path:
             raise ValueError("network-direct player requires --model-path")
-        model = load_model_from_checkpoint(model_path, game_module)
+        model = load_model_from_checkpoint(model_path, game_module, device)
         return NetworkDirectPlayer(
             model, name=name or f"Direct({Path(model_path).stem})"
         )
@@ -226,11 +233,26 @@ def main():
         default=0.5,
         help="MCTS time limit in seconds (default: 0.5)",
     )
+    parser.add_argument(
+        "--device",
+        type=str,
+        choices=["cpu", "cuda", "auto"],
+        default="auto",
+        help="Device to use for neural network inference (default: auto)",
+    )
 
     args = parser.parse_args()
 
     # Load game module
     game_module = load_game_module(args.game)
+
+    # Determine device
+    if args.device == "auto":
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    else:
+        device = torch.device(args.device)
+    
+    print(f"🖥️  Using device: {device}")
 
     # Create players
     try:
@@ -240,6 +262,7 @@ def main():
             args.player1_model,
             args.mcts_time_limit,
             f"Player1({args.player1})",
+            device,
         )
         player2 = create_player(
             args.player2,
@@ -247,6 +270,7 @@ def main():
             args.player2_model,
             args.mcts_time_limit,
             f"Player2({args.player2})",
+            device,
         )
 
         print(f"👤 Player 1: {player1.name} ({args.player1})")
