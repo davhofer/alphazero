@@ -73,15 +73,16 @@ def self_play(model: network.Model, config: TrainingConfig, game_module) -> list
 
     for _ in tqdm(range(config.self_play_rounds), desc="Self-play games", leave=False):
         state = game_module.GameState.initial_state()
-        game_history = []  # (state, policy) pairs for this game
+        game_history = []  # (state, policy, current_player) tuples for this game
 
         # Play one complete game
         while not state.is_terminal():
             root_node = mcts.Node(None, state, 1.0, None)
             policy = mcts.run_mcts(root_node, model, time_limit=config.mcts_time_limit)
 
-            # Store state and MCTS policy for training
-            game_history.append((state.encode(), policy))
+            # Store state, MCTS policy, and current player for training
+            # CRITICAL: We must track which player is to move at this position
+            game_history.append((state.encode(), policy, state.current_player))
 
             # Sample move from MCTS policy (with some randomness)
             policy_probs = policy.numpy()
@@ -100,15 +101,18 @@ def self_play(model: network.Model, config: TrainingConfig, game_module) -> list
         assert final_value is not None
 
         # Create training examples with final outcome as ground truth
-        for i, (state_encoding, mcts_policy) in enumerate(game_history):
-            # Convert objective result to current player's perspective at this position
-            player_value = final_value if i % 2 == 0 else -final_value
+        for state_encoding, mcts_policy, current_player in game_history:
+            # Convert objective result to the perspective of the player who was to move
+            # final_value is from player 1's perspective (1 = P1 wins, -1 = P2 wins)
+            # current_player is who was to move (1 or -1)
+            # The encoding already shows the position from current_player's perspective
+            player_value = final_value * current_player
 
             training_examples.append(
                 {
-                    "state": state_encoding,  # Input tensor
+                    "state": state_encoding,  # Input tensor (from current player's view)
                     "policy": mcts_policy,  # Target policy
-                    "value": player_value,  # Target value
+                    "value": player_value,  # Target value (from current player's view)
                 }
             )
 
@@ -276,7 +280,7 @@ def load_checkpoint(model: network.Model, checkpoint_path: str):
     return checkpoint
 
 
-def training_loop(config: TrainingConfig) -> None:
+def training_loop(config: TrainingConfig) -> network.Model:
     """Main AlphaZero training loop with monitoring and checkpoints."""
 
     # Load game module
@@ -406,6 +410,8 @@ def training_loop(config: TrainingConfig) -> None:
     print("\n✅ Training complete!")
     print(f"📁 Best model saved in: {config.checkpoint_dir}")
     print(f"📊 Logs saved in: {config.log_dir}")
+
+    return model
 
 
 def main():
