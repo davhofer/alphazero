@@ -17,6 +17,7 @@ from .players import (
     GreedyPlayer,
     HumanPlayer,
 )
+from .games import load_game_module
 
 
 def play_games(
@@ -229,14 +230,7 @@ def main():
     args = parser.parse_args()
 
     # Load game module
-    try:
-        # Prepend "alphazero.games." to the module name
-        full_module_name = f"alphazero.games.{args.game}"
-        game_module = importlib.import_module(full_module_name)
-        print(f"🎮 Loaded game module: {args.game}")
-    except ImportError as e:
-        print(f"❌ Failed to import game module '{args.game}': {e}")
-        return
+    game_module = load_game_module(args.game)
 
     # Create players
     try:
