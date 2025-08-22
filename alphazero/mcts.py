@@ -160,8 +160,11 @@ def run_mcts(root: Node, model: network.Model, time_limit: float = 0.5) -> torch
     # Create policy based on visit counts
     policy = [0.0] * root.state.__class__.num_possible_moves()
 
-    # Avoid division by zero - if no visits, return uniform policy over legal moves
-    if root.visit_count == 0:
+    # Calculate total visits to children (this is what matters for the policy)
+    total_child_visits = sum(child.visit_count for child in root.children)
+    
+    # If no child visits, return uniform policy over legal moves
+    if total_child_visits == 0:
         legal_moves = root.state.get_legal_moves()
         if legal_moves:
             uniform_prob = 1.0 / len(legal_moves)
@@ -170,9 +173,10 @@ def run_mcts(root: Node, model: network.Model, time_limit: float = 0.5) -> torch
                 policy[encoded_move] = uniform_prob
         return torch.tensor(policy, dtype=torch.float32)
 
+    # Calculate policy based on child visit ratios
     for child in root.children:
         if child.move is not None:  # Safety check
             encoded_move = child.move.encode()
-            policy[encoded_move] = child.visit_count / root.visit_count
+            policy[encoded_move] = child.visit_count / total_child_visits
 
     return torch.tensor(policy, dtype=torch.float32)
