@@ -31,6 +31,9 @@ class TrainingConfig:
     # Self-play parameters
     self_play_rounds: int = 100
     mcts_time_limit: float = 0.5
+    temperature_threshold: int = 30  # Use temperature=1 for first N moves, then 0
+    temperature_exploration: float = 1.0  # Temperature for exploration phase
+    temperature_exploitation: float = 0.0  # Temperature for exploitation phase
 
     # Network training parameters
     epochs: int = 10
@@ -63,8 +66,44 @@ class TrainingConfig:
             return cls(**json.load(f))
 
 
-# TODO: replace game with the actual game we're learning
-# TODO: how to do that elegantly?
+def apply_temperature(policy: torch.Tensor, temperature: float) -> torch.Tensor:
+    """
+    Apply temperature to policy probabilities to control exploration vs exploitation.
+
+    Args:
+        policy: Probability distribution over moves
+        temperature: Temperature parameter
+            - 0: Deterministic (pick best move)
+            - 1: Use raw probabilities (unchanged)
+            - >1: More exploration (flatter distribution)
+            - <1: Less exploration (sharper distribution)
+
+    Returns:
+        Modified policy distribution
+    """
+    if temperature == 0:
+        # Deterministic: pick the best move
+        best_move = torch.argmax(policy)
+        new_policy = torch.zeros_like(policy)
+        new_policy[best_move] = 1.0
+        return new_policy
+    elif temperature == 1.0:
+        # No change needed - use original distribution
+        return policy
+    else:
+        # Apply temperature scaling
+        # Use log probabilities for numerical stability
+        log_policy = torch.log(policy + 1e-8)
+        log_policy = log_policy / temperature
+
+        # Subtract max for numerical stability
+        log_policy = log_policy - torch.max(log_policy)
+
+        # Exponentiate and normalize
+        new_policy = torch.exp(log_policy)
+        new_policy = new_policy / torch.sum(new_policy)
+
+        return new_policy
 
 
 def self_play(model: network.Model, config: TrainingConfig, game_module) -> list[dict]:
@@ -74,6 +113,7 @@ def self_play(model: network.Model, config: TrainingConfig, game_module) -> list
     for _ in tqdm(range(config.self_play_rounds), desc="Self-play games", leave=False):
         state = game_module.GameState.initial_state()
         game_history = []  # (state, policy, current_player) tuples for this game
+        move_count = 0  # Track move number for temperature threshold
 
         # Play one complete game
         while not state.is_terminal():
@@ -84,8 +124,18 @@ def self_play(model: network.Model, config: TrainingConfig, game_module) -> list
             # CRITICAL: We must track which player is to move at this position
             game_history.append((state.encode(), policy, state.current_player))
 
-            # Sample move from MCTS policy (with some randomness)
-            policy_probs = policy.numpy()
+            # Select temperature based on move count
+            temperature = (
+                config.temperature_exploration
+                if move_count < config.temperature_threshold
+                else config.temperature_exploitation
+            )
+
+            # Apply temperature to policy (τ=1.0 returns unchanged)
+            temperature_policy = apply_temperature(policy, temperature)
+
+            # Sample move from temperature-adjusted policy
+            policy_probs = temperature_policy.numpy()
             encoded_move = random.choices(
                 range(len(policy_probs)), weights=policy_probs
             )[0]
@@ -93,6 +143,7 @@ def self_play(model: network.Model, config: TrainingConfig, game_module) -> list
             # Decode move and apply it
             move = game_module.Move.decode(encoded_move)
             state = state.apply_move(move)
+            move_count += 1
 
         # Game is finished, get final outcome
         final_value = (
@@ -454,6 +505,24 @@ def main():
         default=0.5,
         help="MCTS time limit in seconds (default: 0.5)",
     )
+    parser.add_argument(
+        "--temperature-threshold",
+        type=int,
+        default=30,
+        help="Number of moves to use exploration temperature (default: 30)",
+    )
+    parser.add_argument(
+        "--temperature-exploration",
+        type=float,
+        default=1.0,
+        help="Temperature for exploration phase (default: 1.0)",
+    )
+    parser.add_argument(
+        "--temperature-exploitation",
+        type=float,
+        default=0.0,
+        help="Temperature for exploitation phase (default: 0.0)",
+    )
 
     # Network training parameters
     parser.add_argument(
@@ -541,6 +610,9 @@ def main():
             checkpoint_frequency=args.checkpoint_freq,
             self_play_rounds=args.self_play_rounds,
             mcts_time_limit=args.mcts_time_limit,
+            temperature_threshold=args.temperature_threshold,
+            temperature_exploration=args.temperature_exploration,
+            temperature_exploitation=args.temperature_exploitation,
             epochs=args.epochs,
             batch_size=args.batch_size,
             learning_rate=args.learning_rate,

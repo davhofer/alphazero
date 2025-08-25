@@ -8,6 +8,7 @@ from typing import Optional
 from .games import game
 from . import network
 from . import mcts
+from ..training import apply_temperature
 
 
 class Player(ABC):
@@ -46,10 +47,12 @@ class NetworkMCTSPlayer(Player):
         model: network.Model,
         mcts_time_limit: float = 1.0,
         name: str = "NetworkMCTS",
+        temperature: float = 0.0,  # Default to deterministic play for evaluation
     ):
         super().__init__(name)
         self.model = model
         self.mcts_time_limit = mcts_time_limit
+        self.temperature = temperature
         self.model.eval()
 
     def select_move(self, state: game.GameState) -> game.Move:
@@ -57,28 +60,48 @@ class NetworkMCTSPlayer(Player):
         root_node = mcts.Node(None, state, 1.0, None)
         policy = mcts.run_mcts(root_node, self.model, time_limit=self.mcts_time_limit)
 
-        # Sample from MCTS policy
-        policy_probs = policy.numpy()
+        # Get legal moves
         legal_moves = state.get_legal_moves()
 
-        # Filter policy to only legal moves
-        legal_probs = []
-        legal_move_list = []
-        for move in legal_moves:
-            encoded_move = move.encode()
-            legal_probs.append(policy_probs[encoded_move])
-            legal_move_list.append(move)
-
-        # Normalize probabilities
-        total_prob = sum(legal_probs)
-        if total_prob > 0:
-            legal_probs = [p / total_prob for p in legal_probs]
-            selected_move = random.choices(legal_move_list, weights=legal_probs)[0]
+        if self.temperature == 0:
+            # Deterministic: pick the move with highest MCTS probability
+            best_move = None
+            best_prob = -1
+            for move in legal_moves:
+                prob = policy[move.encode()].item()
+                if prob > best_prob:
+                    best_prob = prob
+                    best_move = move
+            return best_move if best_move else random.choice(legal_moves)
         else:
-            # Fallback to random if all probabilities are zero
-            selected_move = random.choice(legal_move_list)
+            # Stochastic: sample from MCTS policy (with optional temperature)
+            policy_probs = policy.numpy()
 
-        return selected_move
+            # Filter policy to only legal moves
+            legal_probs = []
+            legal_move_list = []
+            for move in legal_moves:
+                encoded_move = move.encode()
+                legal_probs.append(policy_probs[encoded_move])
+                legal_move_list.append(move)
+
+            # Normalize probabilities
+            total_prob = sum(legal_probs)
+            if total_prob > 0:
+                legal_probs = [p / total_prob for p in legal_probs]
+
+                # Apply temperature (1.0 returns unchanged, so always safe to call)
+                temp_policy = apply_temperature(
+                    torch.tensor(legal_probs), self.temperature
+                )
+                legal_probs = temp_policy.numpy().tolist()
+
+                selected_move = random.choices(legal_move_list, weights=legal_probs)[0]
+            else:
+                # Fallback to random if all probabilities are zero
+                selected_move = random.choice(legal_move_list)
+
+            return selected_move
 
 
 class NetworkDirectPlayer(Player):
@@ -183,4 +206,3 @@ class HumanPlayer(Player):
                     print("Invalid choice. Please try again.")
             except ValueError:
                 print("Please enter a valid number.")
-
