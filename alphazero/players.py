@@ -8,7 +8,7 @@ from typing import Optional
 from .games import game
 from . import network
 from . import mcts
-from ..training import apply_temperature
+from . import training
 
 
 class Player(ABC):
@@ -91,7 +91,7 @@ class NetworkMCTSPlayer(Player):
                 legal_probs = [p / total_prob for p in legal_probs]
 
                 # Apply temperature (1.0 returns unchanged, so always safe to call)
-                temp_policy = apply_temperature(
+                temp_policy = training.apply_temperature(
                     torch.tensor(legal_probs), self.temperature
                 )
                 legal_probs = temp_policy.numpy().tolist()
