@@ -177,23 +177,25 @@ def run_mcts(
         dirichlet_epsilon: Mixing parameter for noise (typically 0.25)
         dirichlet_alpha: Dirichlet distribution parameter (0.3 for chess, 0.03 for Go)
     """
+    # Pre-expand root node if needed
+    if not root.children and not root.is_terminal():
+        _ = expand(root, model)
+        
+        # Add Dirichlet noise for exploration during training
+        if training and root.children:
+            noise = np.random.dirichlet([dirichlet_alpha] * len(root.children))
+            for i, child in enumerate(root.children):
+                child.prior = (
+                    1 - dirichlet_epsilon
+                ) * child.prior + dirichlet_epsilon * noise[i]
+    
     start_time = time.time()
-    iterations = 0
 
     while time.time() - start_time < time_limit:
         # TODO: should we calculate avg. iteration time and take it into account?
         node = select(root)
         reward = expand(node, model)
         backpropagate(node, reward)
-        iterations += 1
-
-        # Add Dirichlet noise to root's children after first expansion (training only)
-        if iterations == 1 and training and root.children:
-            noise = np.random.dirichlet([dirichlet_alpha] * len(root.children))
-            for i, child in enumerate(root.children):
-                child.prior = (
-                    1 - dirichlet_epsilon
-                ) * child.prior + dirichlet_epsilon * noise[i]
 
     # Create policy based on visit counts
     policy = [0.0] * root.state.__class__.num_possible_moves()
