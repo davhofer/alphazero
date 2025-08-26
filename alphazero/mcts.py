@@ -30,7 +30,7 @@ class Node:
         self.parent = parent
         self.state = state
         self.prior = prior
-        self.visit_count = 0.0
+        self.visit_count = 1.0 if parent is None else 0.0
         self.value = 0.0
         self.children = []
         self.move = move
@@ -44,8 +44,8 @@ class Node:
         """
         AlphaZero UCB formula: Q(s,a) + c_puct * P(s,a) * sqrt(N(s)) / (1 + N(s,a))
 
-        With:        Where:
-        - Q(s,a) = average value of this node (exploitation)
+        Where:
+        - Q(s,a) = average value of this node from parent's perspective
         - P(s,a) = prior probability from neural network policy
         - N(s) = parent visit count
         - N(s,a) = this node's visit count
@@ -57,7 +57,10 @@ class Node:
         if self.visit_count == 0:
             q_value = 0.0
         else:
-            q_value = self.value / self.visit_count
+            # self.value is accumulated from this node's player perspective
+            # Negate to get value from parent's perspective (who is selecting the move)
+            # Also normalize between 0 and 1
+            q_value = 1 - ((self.value / self.visit_count) + 1) / 2
 
         # Exploration term: c_puct * P(s,a) * sqrt(N(s)) / (1 + N(s,a))
         exploration = (
@@ -66,10 +69,7 @@ class Node:
             * np.sqrt(self.parent.visit_count)
             / (1 + self.visit_count)
         )
-
-        # Negate Q value because child's value is from opponent's perspective
-        # We want to select moves that are bad for the opponent (good for us)
-        return -q_value + exploration
+        return q_value + exploration
 
     def best_child_ucb(self) -> "Node":
         """Select best child using AlphaZero UCB formula."""
@@ -112,6 +112,24 @@ def expand(node: Node, model: network.Model) -> float:
 
     legal_moves = node.state.get_legal_moves()
 
+    # Create mask for legal moves and apply to policy
+    legal_mask = torch.zeros_like(policy)
+    for move in legal_moves:
+        legal_mask[move.encode()] = 1.0
+
+    # Mask illegal moves and renormalize
+    policy = policy * legal_mask
+    policy_sum = policy.sum()
+
+    if policy_sum > 0:
+        policy = policy / policy_sum
+    else:
+        # If all legal moves have zero probability, use uniform distribution
+        uniform_prob = 1.0 / len(legal_moves) if legal_moves else 0.0
+        for move in legal_moves:
+            policy[move.encode()] = uniform_prob
+
+    # Create child nodes with normalized probabilities
     for move in legal_moves:
         encoded_move = move.encode()
         p = policy[encoded_move].detach().item()
