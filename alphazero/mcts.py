@@ -67,7 +67,9 @@ class Node:
             / (1 + self.visit_count)
         )
 
-        return q_value + exploration
+        # Negate Q value because child's value is from opponent's perspective
+        # We want to select moves that are bad for the opponent (good for us)
+        return -q_value + exploration
 
     def best_child_ucb(self) -> "Node":
         """Select best child using AlphaZero UCB formula."""
@@ -162,7 +164,7 @@ def run_mcts(root: Node, model: network.Model, time_limit: float = 0.5) -> torch
 
     # Calculate total visits to children (this is what matters for the policy)
     total_child_visits = sum(child.visit_count for child in root.children)
-    
+
     # If no child visits, return uniform policy over legal moves
     if total_child_visits == 0:
         legal_moves = root.state.get_legal_moves()
