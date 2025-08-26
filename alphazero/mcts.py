@@ -148,21 +148,10 @@ def run_mcts(root: Node, model: network.Model, time_limit: float = 0.5) -> torch
         backpropagate(node, reward)
         iterations += 1
 
-    # If root was expanded but no children visited, fall back to uniform over legal moves
-    if root.children and all(child.visit_count == 0 for child in root.children):
-        legal_moves = root.state.get_legal_moves()
-        policy = [0.0] * root.state.__class__.num_possible_moves()
-        if legal_moves:
-            uniform_prob = 1.0 / len(legal_moves)
-            for move in legal_moves:
-                encoded_move = move.encode()
-                policy[encoded_move] = uniform_prob
-        return torch.tensor(policy, dtype=torch.float32)
-
     # Create policy based on visit counts
     policy = [0.0] * root.state.__class__.num_possible_moves()
 
-    # Calculate total visits to children (this is what matters for the policy)
+    # Calculate total visits to children
     total_child_visits = sum(child.visit_count for child in root.children)
 
     # If no child visits, return uniform policy over legal moves
