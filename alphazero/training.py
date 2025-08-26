@@ -34,6 +34,8 @@ class TrainingConfig:
     temperature_threshold: int = 30  # Use temperature=1 for first N moves, then 0
     temperature_exploration: float = 1.0  # Temperature for exploration phase
     temperature_exploitation: float = 0.0  # Temperature for exploitation phase
+    dirichlet_epsilon: float = 0.25  # Mixing parameter for Dirichlet noise
+    dirichlet_alpha: float = 0.3  # Dirichlet distribution parameter (0.3 for chess, 0.03 for Go)
 
     # Network training parameters
     epochs: int = 10
@@ -118,7 +120,14 @@ def self_play(model: network.Model, config: TrainingConfig, game_module) -> list
         # Play one complete game
         while not state.is_terminal():
             root_node = mcts.Node(None, state, 1.0, None)
-            policy = mcts.run_mcts(root_node, model, time_limit=config.mcts_time_limit)
+            policy = mcts.run_mcts(
+                root_node,
+                model,
+                time_limit=config.mcts_time_limit,
+                training=True,
+                dirichlet_epsilon=config.dirichlet_epsilon,
+                dirichlet_alpha=config.dirichlet_alpha,
+            )
 
             # Store state, MCTS policy, and current player for training
             # CRITICAL: We must track which player is to move at this position

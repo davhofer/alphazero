@@ -155,7 +155,24 @@ def backpropagate(node: Node, reward: float) -> None:
         current_reward = -current_reward
 
 
-def run_mcts(root: Node, model: network.Model, time_limit: float = 0.5) -> torch.Tensor:
+def run_mcts(
+    root: Node,
+    model: network.Model,
+    time_limit: float = 0.5,
+    training: bool = False,
+    dirichlet_epsilon: float = 0.25,
+    dirichlet_alpha: float = 0.3,
+) -> torch.Tensor:
+    """Run MCTS simulations from root node.
+    
+    Args:
+        root: Root node to start search from
+        model: Neural network model for evaluation
+        time_limit: Time limit for search in seconds
+        training: If True, add Dirichlet noise to root for exploration during self-play
+        dirichlet_epsilon: Mixing parameter for noise (typically 0.25)
+        dirichlet_alpha: Dirichlet distribution parameter (0.3 for chess, 0.03 for Go)
+    """
     start_time = time.time()
     iterations = 0
 
@@ -165,6 +182,12 @@ def run_mcts(root: Node, model: network.Model, time_limit: float = 0.5) -> torch
         reward = expand(node, model)
         backpropagate(node, reward)
         iterations += 1
+        
+        # Add Dirichlet noise to root's children after first expansion (training only)
+        if iterations == 1 and training and root.children:
+            noise = np.random.dirichlet([dirichlet_alpha] * len(root.children))
+            for i, child in enumerate(root.children):
+                child.prior = (1 - dirichlet_epsilon) * child.prior + dirichlet_epsilon * noise[i]
 
     # Create policy based on visit counts
     policy = [0.0] * root.state.__class__.num_possible_moves()
