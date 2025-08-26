@@ -104,27 +104,30 @@ def expand(node: Node, model: network.Model) -> float:
     # Move tensor to same device as model
     device = next(model.parameters()).device
     state_tensor = state_tensor.to(device)
-    policy, value = model.forward(state_tensor)
+    policy_logits, value = model.forward(state_tensor)
 
     # Extract single results from batch
-    policy = policy[0]  # Remove batch dimension
+    policy_logits = policy_logits[0]  # Remove batch dimension
     value = value[0, 0].item()  # Extract scalar value
 
     legal_moves = node.state.get_legal_moves()
 
-    # Create mask for legal moves and apply to policy
-    legal_mask = torch.zeros_like(policy)
+    # Create mask for legal moves
+    legal_mask = torch.zeros_like(policy_logits)
     for move in legal_moves:
         legal_mask[move.encode()] = 1.0
 
-    # Mask illegal moves and renormalize
-    policy = policy * legal_mask
-    policy_sum = policy.sum()
-
-    if policy_sum > 0:
-        policy = policy / policy_sum
-    else:
+    # Mask illegal moves by setting their logits to -inf
+    masked_logits = policy_logits.clone()
+    masked_logits[legal_mask == 0] = -float('inf')
+    
+    # Apply softmax to get probabilities
+    policy = torch.softmax(masked_logits, dim=0)
+    
+    # Handle edge case where all moves are illegal (shouldn't happen normally)
+    if torch.isnan(policy).any() or policy.sum() == 0:
         # If all legal moves have zero probability, use uniform distribution
+        policy = torch.zeros_like(policy_logits)
         uniform_prob = 1.0 / len(legal_moves) if legal_moves else 0.0
         for move in legal_moves:
             policy[move.encode()] = uniform_prob
@@ -155,6 +158,7 @@ def backpropagate(node: Node, reward: float) -> None:
         current_reward = -current_reward
 
 
+@torch.no_grad()
 def run_mcts(
     root: Node,
     model: network.Model,
@@ -164,7 +168,7 @@ def run_mcts(
     dirichlet_alpha: float = 0.3,
 ) -> torch.Tensor:
     """Run MCTS simulations from root node.
-    
+
     Args:
         root: Root node to start search from
         model: Neural network model for evaluation
@@ -182,12 +186,14 @@ def run_mcts(
         reward = expand(node, model)
         backpropagate(node, reward)
         iterations += 1
-        
+
         # Add Dirichlet noise to root's children after first expansion (training only)
         if iterations == 1 and training and root.children:
             noise = np.random.dirichlet([dirichlet_alpha] * len(root.children))
             for i, child in enumerate(root.children):
-                child.prior = (1 - dirichlet_epsilon) * child.prior + dirichlet_epsilon * noise[i]
+                child.prior = (
+                    1 - dirichlet_epsilon
+                ) * child.prior + dirichlet_epsilon * noise[i]
 
     # Create policy based on visit counts
     policy = [0.0] * root.state.__class__.num_possible_moves()

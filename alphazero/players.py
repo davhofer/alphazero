@@ -119,12 +119,24 @@ class NetworkDirectPlayer(Player):
             # Move tensor to same device as model
             device = next(self.model.parameters()).device
             state_tensor = state_tensor.to(device)
-            policy, _ = self.model(state_tensor)
-            policy = policy[0]  # Remove batch dimension
+            policy_logits, _ = self.model(state_tensor)
+            policy_logits = policy_logits[0]  # Remove batch dimension
 
-        # Convert to probabilities and filter legal moves
-        policy_probs = policy.cpu().numpy()
+        # Get legal moves
         legal_moves = state.get_legal_moves()
+        
+        # Create mask for legal moves
+        legal_mask = torch.zeros_like(policy_logits)
+        for move in legal_moves:
+            legal_mask[move.encode()] = 1.0
+        
+        # Mask illegal moves by setting their logits to -inf
+        masked_logits = policy_logits.clone()
+        masked_logits[legal_mask == 0] = -float('inf')
+        
+        # Apply softmax to get probabilities
+        policy = torch.softmax(masked_logits, dim=0)
+        policy_probs = policy.cpu().numpy()
 
         legal_probs = []
         legal_move_list = []
@@ -133,10 +145,9 @@ class NetworkDirectPlayer(Player):
             legal_probs.append(policy_probs[encoded_move])
             legal_move_list.append(move)
 
-        # Normalize and sample
+        # Normalize and sample (should already be normalized from softmax)
         total_prob = sum(legal_probs)
         if total_prob > 0:
-            legal_probs = [p / total_prob for p in legal_probs]
             selected_move = random.choices(legal_move_list, weights=legal_probs)[0]
         else:
             selected_move = random.choice(legal_move_list)

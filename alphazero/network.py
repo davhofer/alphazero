@@ -86,7 +86,7 @@ class Model(nn.Module):
             x: Input tensor of shape (batch_size, input_channels, board_height, board_width)
                
         Returns:
-            policy: Policy probabilities of shape (batch_size, num_possible_moves)
+            policy: Policy logits of shape (batch_size, num_possible_moves)
             value: Value estimates of shape (batch_size, 1)
         """
         # Validate input shape
@@ -101,11 +101,10 @@ class Model(nn.Module):
         for block in self.residual_blocks:
             x = block(x)
         
-        # Policy head
+        # Policy head - output raw logits, no softmax
         policy = F.relu(self.policy_bn(self.policy_conv(x)))
         policy = policy.view(policy.size(0), -1)  # Flatten: (batch, channels * height * width)
-        policy = self.policy_fc(policy)
-        policy = F.softmax(policy, dim=1)
+        policy = self.policy_fc(policy)  # Raw logits
         
         # Value head
         value = F.relu(self.value_bn(self.value_conv(x)))

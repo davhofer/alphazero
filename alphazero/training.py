@@ -235,19 +235,18 @@ def train_network(
             optimizer.zero_grad()
 
             # Forward pass
-            pred_policies, pred_values = model(batch_states)
+            pred_policy_logits, pred_values = model(batch_states)
 
             # Calculate losses following AlphaZero paper: l = (z-v)^2 - π^T * log p + c * ||θ||^2
 
             # Value loss: (z-v)^2
             value_loss = value_loss_fn(pred_values, batch_target_values)
 
-            # Policy loss: -π^T * log p (cross-entropy between target π and predicted p)
-            # Add small epsilon to prevent log(0)
-            log_pred_policies = torch.log(pred_policies + 1e-8)
-            policy_loss = -torch.sum(
-                batch_target_policies * log_pred_policies, dim=1
-            ).mean()
+            # Policy loss: cross-entropy between target π and predicted logits
+            # F.cross_entropy expects logits and will apply log_softmax internally
+            # We use manual calculation since our targets are probabilities, not class indices
+            log_probs = torch.log_softmax(pred_policy_logits, dim=1)
+            policy_loss = -torch.sum(batch_target_policies * log_probs, dim=1).mean()
 
             # Combined loss (L2 regularization is handled by optimizer weight_decay)
             total_batch_loss = value_loss + policy_loss
