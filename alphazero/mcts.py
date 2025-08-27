@@ -35,7 +35,8 @@ class Node:
         self.children = []
         self.move = move
 
-        self.player = 1 if parent is None else -parent.player
+        # Get the actual current player from the state
+        self.player = state.current_player
 
     def is_terminal(self) -> bool:
         return self.state.is_terminal()
@@ -59,8 +60,10 @@ class Node:
         else:
             # self.value is accumulated from this node's player perspective
             # Negate to get value from parent's perspective (who is selecting the move)
-            # Also normalize between 0 and 1
-            q_value = 1 - ((self.value / self.visit_count) + 1) / 2
+            avg_child_value = self.value / self.visit_count  # [-1, 1] from child's perspective
+            parent_value = -avg_child_value  # [-1, 1] from parent's perspective
+            # Normalize to [0, 1] range for UCB
+            q_value = (parent_value + 1) / 2
 
         # Exploration term: c_puct * P(s,a) * sqrt(N(s)) / (1 + N(s,a))
         exploration = (
