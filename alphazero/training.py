@@ -36,7 +36,9 @@ class TrainingConfig:
     temperature_exploration: float = 1.0  # Temperature for exploration phase
     temperature_exploitation: float = 0.0  # Temperature for exploitation phase
     dirichlet_epsilon: float = 0.25  # Mixing parameter for Dirichlet noise
-    dirichlet_alpha: float = 0.3  # Dirichlet distribution parameter (0.3 for chess, 0.03 for Go)
+    dirichlet_alpha: float = (
+        0.3  # Dirichlet distribution parameter (0.3 for chess, 0.03 for Go)
+    )
 
     # Network training parameters
     epochs: int = 10
@@ -181,7 +183,9 @@ def self_play(model: network.Model, config: TrainingConfig, game_module) -> list
 
 
 def train_network(
-    model: network.Model, training_samples: list[dict], config: TrainingConfig
+    model: network.Model,
+    training_samples: list[dict],
+    config: TrainingConfig,
 ) -> dict:
     """Train the neural network on self-play data."""
 
@@ -302,6 +306,7 @@ def save_model(
     iteration: int,
     config: TrainingConfig,
     training_stats: list,
+    timestamp: str | None = None,
 ) -> None:
     """Save model checkpoint with training statistics."""
     Path(config.checkpoint_dir).mkdir(exist_ok=True)
@@ -315,10 +320,13 @@ def save_model(
     }
 
     # Save model with timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    model_path = Path(config.checkpoint_dir) / f"{config.game_module}_{timestamp}.pt"
+    if timestamp is None:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    model_path = (
+        Path(config.checkpoint_dir) / f"model_{config.game_module}_{timestamp}.pt"
+    )
     torch.save(checkpoint, model_path)
-    
+
     if training_stats and len(training_stats) > 0:
         latest_loss = training_stats[-1]["avg_loss"]
         print(f"💾 Model saved: {model_path.name} (Loss: {latest_loss:.4f})")
@@ -326,18 +334,20 @@ def save_model(
         print(f"💾 Model saved: {model_path.name}")
 
 
-def load_checkpoint(model: network.Model, checkpoint_path: str, device: str | None = None):
+def load_checkpoint(
+    model: network.Model, checkpoint_path: str, device: str | None = None
+):
     """Load model from checkpoint.
-    
+
     Args:
         model: The model to load weights into
         checkpoint_path: Path to the checkpoint file
-        device: Device to load the model onto (e.g., 'cuda', 'cpu'). 
+        device: Device to load the model onto (e.g., 'cuda', 'cpu').
                 If None, auto-detects (uses CUDA if available)
     """
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
-    
+
     checkpoint = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
     return checkpoint
@@ -353,8 +363,11 @@ def training_loop(config: TrainingConfig) -> network.Model:
     Path(config.checkpoint_dir).mkdir(exist_ok=True)
     Path(config.log_dir).mkdir(exist_ok=True)
 
+    # Compute timestamp for run
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
     # Save configuration
-    config.save(Path(config.log_dir) / "config.json")
+    config.save(Path(config.log_dir) / f"config_{config.game_module}_{timestamp}.json")
 
     # Setup device (GPU/CPU)
     if config.device:
@@ -455,7 +468,9 @@ def training_loop(config: TrainingConfig) -> network.Model:
 
         # Save model
         if iteration % config.checkpoint_frequency == 0:
-            save_model(model, optimizer, iteration, config, training_stats)
+            save_model(
+                model, optimizer, iteration, config, training_stats, timestamp=timestamp
+            )
 
         # Save logs (structured for easy plotting)
         logs = {
@@ -464,7 +479,9 @@ def training_loop(config: TrainingConfig) -> network.Model:
             "config": config.__dict__,
         }
         with open(
-            Path(config.log_dir) / f"training_log_{config.game_module}.json", "w"
+            Path(config.log_dir)
+            / f"training_log_{config.game_module}_{timestamp}.json",
+            "w",
         ) as f:
             json.dump(logs, f, indent=2)
 
