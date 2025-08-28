@@ -326,9 +326,19 @@ def save_model(
         print(f"💾 Model saved: {model_path.name}")
 
 
-def load_checkpoint(model: network.Model, checkpoint_path: str):
-    """Load model from checkpoint."""
-    checkpoint = torch.load(checkpoint_path, map_location="cpu")
+def load_checkpoint(model: network.Model, checkpoint_path: str, device: str | None = None):
+    """Load model from checkpoint.
+    
+    Args:
+        model: The model to load weights into
+        checkpoint_path: Path to the checkpoint file
+        device: Device to load the model onto (e.g., 'cuda', 'cpu'). 
+                If None, auto-detects (uses CUDA if available)
+    """
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    
+    checkpoint = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
     return checkpoint
 
