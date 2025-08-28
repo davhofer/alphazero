@@ -17,6 +17,18 @@ The implementation includes:
 - Self-play training loop
 - Evaluation with various players
 
+### Missing features
+
+This package is mainly for (self-)educational purposes and does not implement all features required for optimal efficiency and performance.
+
+Missing:
+
+- experience replay buffer
+- parallelization for data generation (self-play)
+- data augmentation (e.g. using board symmetries)
+- various numerical stability & training optimization measures
+- model pass/resignation capabilities
+
 ## Installation
 
 ### As a Package
