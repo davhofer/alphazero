@@ -11,6 +11,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from tqdm import tqdm
+from datetime import datetime
 from . import mcts
 from . import network
 from . import evaluation
@@ -295,14 +296,14 @@ def train_network(
     return final_stats
 
 
-def save_best_model(
+def save_model(
     model: network.Model,
     optimizer,
     iteration: int,
     config: TrainingConfig,
     training_stats: list,
 ) -> None:
-    """Save best model checkpoint with training statistics."""
+    """Save model checkpoint with training statistics."""
     Path(config.checkpoint_dir).mkdir(exist_ok=True)
 
     checkpoint = {
@@ -313,23 +314,16 @@ def save_best_model(
         "training_stats": training_stats,
     }
 
-    # Save best checkpoint (based on lowest loss)
+    # Save model with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    model_path = Path(config.checkpoint_dir) / f"{config.game_module}_{timestamp}.pt"
+    torch.save(checkpoint, model_path)
+    
     if training_stats and len(training_stats) > 0:
         latest_loss = training_stats[-1]["avg_loss"]
-        best_path = Path(config.checkpoint_dir) / f"best_model_{config.game_module}.pt"
-
-        # Check if this is the best model so far
-        if not best_path.exists():
-            torch.save(checkpoint, best_path)
-            print(f"💾 First model saved! Loss: {latest_loss:.4f}")
-        else:
-            best_checkpoint = torch.load(best_path)
-            best_stats = best_checkpoint["training_stats"]
-            if best_stats and latest_loss < min(
-                stat["avg_loss"] for stat in best_stats[-10:]
-            ):
-                torch.save(checkpoint, best_path)
-                print(f"💾 New best model saved! Loss: {latest_loss:.4f}")
+        print(f"💾 Model saved: {model_path.name} (Loss: {latest_loss:.4f})")
+    else:
+        print(f"💾 Model saved: {model_path.name}")
 
 
 def load_checkpoint(model: network.Model, checkpoint_path: str):
@@ -449,9 +443,9 @@ def training_loop(config: TrainingConfig) -> network.Model:
                 f"({eval_result['wins']}-{eval_result['draws']}-{eval_result['losses']})"
             )
 
-        # Save best model
+        # Save model
         if iteration % config.checkpoint_frequency == 0:
-            save_best_model(model, optimizer, iteration, config, training_stats)
+            save_model(model, optimizer, iteration, config, training_stats)
 
         # Save logs (structured for easy plotting)
         logs = {
@@ -464,10 +458,10 @@ def training_loop(config: TrainingConfig) -> network.Model:
         ) as f:
             json.dump(logs, f, indent=2)
 
-    # Final best model save
-    save_best_model(model, optimizer, config.iterations, config, training_stats)
+    # Final model save
+    save_model(model, optimizer, config.iterations, config, training_stats)
     print("\n✅ Training complete!")
-    print(f"📁 Best model saved in: {config.checkpoint_dir}")
+    print(f"📁 Models saved in: {config.checkpoint_dir}")
     print(f"📊 Logs saved in: {config.log_dir}")
 
     return model
