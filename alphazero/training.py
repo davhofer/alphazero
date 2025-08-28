@@ -486,7 +486,9 @@ def training_loop(config: TrainingConfig) -> network.Model:
             json.dump(logs, f, indent=2)
 
     # Final model save
-    save_model(model, optimizer, config.iterations, config, training_stats)
+    save_model(
+        model, optimizer, config.iterations, config, training_stats, timestamp=timestamp
+    )
     print("\n✅ Training complete!")
     print(f"📁 Models saved in: {config.checkpoint_dir}")
     print(f"📊 Logs saved in: {config.log_dir}")
