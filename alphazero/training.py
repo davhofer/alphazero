@@ -366,9 +366,6 @@ def training_loop(config: TrainingConfig) -> network.Model:
     # Compute timestamp for run
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    # Save configuration
-    config.save(Path(config.log_dir) / f"config_{config.game_module}_{timestamp}.json")
-
     # Setup device (GPU/CPU)
     if config.device:
         # Use specified device
