@@ -99,6 +99,11 @@ class ChessState(GameState):
         else:
             self.board = board.copy()
     
+    @property
+    def current_player(self) -> int:
+        """Returns the current player (1 for white, -1 for black)."""
+        return 1 if self.board.turn else -1
+    
     @classmethod
     def num_possible_moves(cls) -> int:
         """Chess has maximum ~20,480 possible moves with our encoding."""
@@ -130,8 +135,8 @@ class ChessState(GameState):
     
     def get_value(self) -> Optional[float]:
         """
-        Returns objective game result from current player's perspective:
-        1.0 if current player won, -1.0 if current player lost, 0.0 for draw.
+        Returns objective game result from absolute perspective:
+        1.0 if white won, -1.0 if black won, 0.0 for draw.
         """
         if not self.is_terminal():
             return None
@@ -142,10 +147,10 @@ class ChessState(GameState):
         
         if outcome.winner is None:
             return 0.0  # Draw
-        elif outcome.winner == self.board.turn:
-            return 1.0  # Current player won
+        elif outcome.winner == chess.WHITE:
+            return 1.0  # White won
         else:
-            return -1.0  # Current player lost
+            return -1.0  # Black won
     
     def encode(self) -> torch.Tensor:
         """
