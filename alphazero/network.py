@@ -57,6 +57,8 @@ class Model(nn.Module):
         self.board_width = board_width
         self.board_size = board_height * board_width
         self.num_possible_moves = num_possible_moves
+        self.num_filters = num_filters
+        self.num_residual_blocks = num_residual_blocks
         
         # Initial convolutional layer
         self.conv_input = nn.Conv2d(input_channels, num_filters, kernel_size=3, padding=1)
