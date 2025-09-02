@@ -9,6 +9,7 @@ from typing import Dict, Optional
 from tqdm import tqdm
 
 from . import network
+from . import parallel
 from .players import (
     Player,
     RandomPlayer,
@@ -115,6 +116,34 @@ def evaluate_model_vs_random(
         "draws": results["draws"],
         "total_games": results["total_games"],
     }
+
+
+def parallel_evaluate_model(
+    model, game_module, num_games: int = 100, 
+    opponent_type: str = "random",
+    mcts_time_limit: float = 0.5, 
+    num_workers: int = 4
+) -> Dict[str, float]:
+    """
+    Parallel evaluation of model against an opponent.
+    
+    Args:
+        model: Neural network model to evaluate
+        game_module: Game module
+        num_games: Number of games to play
+        opponent_type: Type of opponent ("random", "network_direct")
+        mcts_time_limit: Time limit for MCTS
+        num_workers: Number of parallel workers
+        
+    Returns:
+        Dictionary with evaluation results
+    """
+    return parallel.parallel_evaluate(
+        model, game_module, num_games, 
+        opponent_type=opponent_type,
+        mcts_time_limit=mcts_time_limit,
+        num_workers=num_workers
+    )
 
 
 def load_model_from_checkpoint(checkpoint_path: str, game_module, device: Optional[torch.device] = None) -> network.Model:

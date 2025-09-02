@@ -15,6 +15,7 @@ from datetime import datetime
 from . import mcts
 from . import network
 from . import evaluation
+from . import parallel
 from .games import load_game_module
 
 
@@ -60,6 +61,10 @@ class TrainingConfig:
 
     # Device configuration
     device: str | None = None  # "cpu", "cuda", or None for auto-detect
+
+    # Parallel processing configuration
+    use_parallel: bool = True  # Enable parallel self-play and evaluation
+    num_workers: int = 4  # Number of parallel workers for self-play/evaluation
 
     def save(self, path: str) -> None:
         with open(path, "w") as f:
@@ -405,12 +410,23 @@ def training_loop(config: TrainingConfig) -> network.Model:
 
     # Initial evaluation before training starts
     print("\n🎯 Running initial evaluation vs random baseline...")
-    initial_eval_result = evaluation.evaluate_model_vs_random(
-        model,
-        game_module,
-        num_games=config.eval_games,
-        mcts_time_limit=config.mcts_time_limit,
-    )
+    if config.use_parallel and config.num_workers > 1:
+        print(f"   Using {config.num_workers} parallel workers")
+        initial_eval_result = parallel.parallel_evaluate(
+            model,
+            game_module,
+            num_games=config.eval_games,
+            opponent_type="random",
+            mcts_time_limit=config.mcts_time_limit,
+            num_workers=config.num_workers,
+        )
+    else:
+        initial_eval_result = evaluation.evaluate_model_vs_random(
+            model,
+            game_module,
+            num_games=config.eval_games,
+            mcts_time_limit=config.mcts_time_limit,
+        )
 
     eval_stats.append({"iteration": 0, **initial_eval_result})
 
@@ -423,7 +439,13 @@ def training_loop(config: TrainingConfig) -> network.Model:
     for iteration in tqdm(range(1, config.iterations + 1), desc="Training iterations"):
         # Self-play phase
         tqdm.write(f"\n🎮 Iteration {iteration}: Generating self-play data...")
-        training_samples = self_play(model, config, game_module)
+        if config.use_parallel and config.num_workers > 1:
+            tqdm.write(f"   Using {config.num_workers} parallel workers")
+            training_samples = parallel.parallel_self_play(
+                model, config, game_module, num_workers=config.num_workers
+            )
+        else:
+            training_samples = self_play(model, config, game_module)
         tqdm.write(f"📚 Generated {len(training_samples)} training examples")
 
         # Training phase
@@ -449,12 +471,23 @@ def training_loop(config: TrainingConfig) -> network.Model:
         # Evaluation phase
         if iteration % config.eval_frequency == 0:
             tqdm.write("\n🎯 Evaluating model vs random baseline...")
-            eval_result = evaluation.evaluate_model_vs_random(
-                model,
-                game_module,
-                num_games=config.eval_games,
-                mcts_time_limit=config.mcts_time_limit,
-            )
+            if config.use_parallel and config.num_workers > 1:
+                tqdm.write(f"   Using {config.num_workers} parallel workers")
+                eval_result = parallel.parallel_evaluate(
+                    model,
+                    game_module,
+                    num_games=config.eval_games,
+                    opponent_type="random",
+                    mcts_time_limit=config.mcts_time_limit,
+                    num_workers=config.num_workers,
+                )
+            else:
+                eval_result = evaluation.evaluate_model_vs_random(
+                    model,
+                    game_module,
+                    num_games=config.eval_games,
+                    mcts_time_limit=config.mcts_time_limit,
+                )
 
             eval_stats.append({"iteration": iteration, **eval_result})
 
@@ -621,6 +654,14 @@ def main():
         help="Device to use for training (cpu/cuda). If not specified, uses CUDA if available.",
     )
 
+    # Parallelization
+    parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=4,
+        help="Number of parallel workers to use for self-play and evaluation games.",
+    )
+
     # Configuration file
     parser.add_argument("--config", type=str, help="Load configuration from JSON file")
 
@@ -652,6 +693,8 @@ def main():
             checkpoint_dir=args.checkpoint_dir,
             log_dir=args.log_dir,
             device=args.device,
+            use_parallel=args.num_workers > 1,
+            num_workers=args.num_workers,
         )
 
     print(f"🎮 Training AlphaZero on: {config.game_module}")
